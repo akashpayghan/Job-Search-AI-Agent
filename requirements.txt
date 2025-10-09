@@ -1,0 +1,29 @@
+# Core Framework
+streamlit
+
+# AI & LLM
+openai
+tiktoken
+
+# Vector Database
+chromadb
+
+# HTTP Requests
+requests
+
+# PDF Processing (pypdf is the successor to PyPDF2)
+pypdf
+
+# Data Processing
+pandas
+numpy
+
+# Environment Variables
+python-dotenv
+
+# Additional ChromaDB Dependencies (if needed)
+pydantic
+typing-extensions
+
+# Optional but recommended for production
+tenacity
