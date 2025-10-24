@@ -6,27 +6,51 @@ from pypdf import PdfReader
 from datetime import datetime
 from config import Config
 import streamlit as st
+import os
 
 class ResumeDatabase:
     """Handles ChromaDB operations for resume storage and retrieval"""
     
     def __init__(self):
+        # Set environment variable for ChromaDB if not already set
+        if Config.OPENAI_API_KEY and not os.getenv("CHROMA_OPENAI_API_KEY"):
+            os.environ["CHROMA_OPENAI_API_KEY"] = Config.OPENAI_API_KEY
+        
         self.client = chromadb.PersistentClient(
             path=Config.CHROMA_DB_PATH,
             settings=Settings(anonymized_telemetry=False)
         )
         
         # Use OpenAI text-embedding-3-small model (faster and cheaper)
-        self.embedding_function = embedding_functions.OpenAIEmbeddingFunction(
-            api_key=Config.OPENAI_API_KEY,
-            model_name="text-embedding-3-small"
-        )
+        # Only create embedding function if API key is available
+        if Config.OPENAI_API_KEY:
+            self.embedding_function = embedding_functions.OpenAIEmbeddingFunction(
+                api_key=Config.OPENAI_API_KEY,
+                model_name="text-embedding-3-small"
+            )
+        else:
+            # Use default embedding function if OpenAI key not available yet
+            self.embedding_function = embedding_functions.DefaultEmbeddingFunction()
         
         # Get or create collection
         self.collection = self.client.get_or_create_collection(
             name=Config.COLLECTION_NAME,
             embedding_function=self.embedding_function
         )
+    
+    def update_embedding_function(self):
+        """Update embedding function when API key becomes available"""
+        if Config.OPENAI_API_KEY:
+            os.environ["CHROMA_OPENAI_API_KEY"] = Config.OPENAI_API_KEY
+            self.embedding_function = embedding_functions.OpenAIEmbeddingFunction(
+                api_key=Config.OPENAI_API_KEY,
+                model_name="text-embedding-3-small"
+            )
+            # Recreate collection with new embedding function
+            self.collection = self.client.get_or_create_collection(
+                name=Config.COLLECTION_NAME,
+                embedding_function=self.embedding_function
+            )
     
     def extract_text_from_pdf(self, pdf_path: str) -> str:
         """Extract text from PDF resume"""
@@ -115,11 +139,9 @@ class ResumeDatabase:
             if results and 'documents' in results and results['documents']:
                 if len(results['documents']) > 0:
                     resume_text = results['documents'][0]
-                    st.info(f"📄 Resume retrieved: {len(resume_text)} characters")
                     return resume_text
             
             # If not found, return empty string
-            st.warning("⚠️ No resume found in database")
             return ""
             
         except Exception as e:
