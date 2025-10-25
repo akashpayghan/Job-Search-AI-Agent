@@ -215,17 +215,17 @@ Return JSON:
             }
     
     def search_all_companies(
-        self, 
-        companies: List[str],
-        job_roles: List[str],  # Multiple job roles
-        user_experience: int = 0, 
-        region: str = "in", 
-        language: str = "en"
+    self, 
+    companies: List[str],
+    job_roles: List[str],
+    user_experience: int = 0, 
+    region: str = "in", 
+    language: str = "en"
     ) -> Dict:
-        """Search jobs across companies with validation"""
+        """Search jobs across companies with experience-based validation"""
         all_jobs = []
         resume = self.db.get_full_resume()
-        
+    
         if not resume:
             st.error("❌ No resume found! Please upload your resume first.")
             return {"jobs": [], "validation_report": ""}
@@ -280,20 +280,21 @@ Return JSON:
             st.error(f"❌ Error during search: {str(e)}")
             status_text.text(f"⚠️ Search interrupted")
         
-        status_text.text("✅ Search complete! Now validating results...")
+        status_text.text("✅ Search complete! Now validating with experience filter...")
         
-        # Validation phase
+        # Validation phase with user experience
         original_count = len(all_jobs)
         
-        with st.spinner("🔍 Validation Agent verifying job accuracy..."):
-            validated_jobs = self.validator.validate_job_batch(all_jobs, job_roles)
+        with st.spinner(f"🔍 Validation Agent filtering for {user_experience} years experience..."):
+            validated_jobs = self.validator.validate_job_batch(all_jobs, job_roles, user_experience)  # Pass user_experience
         
         filtered_count = original_count - len(validated_jobs)
         
-        # Generate validation report
+        # Generate validation report with experience info
         filtering_reasons = {
             "Invalid URL": sum(1 for j in all_jobs if not Config.is_valid_job_url(j.get('link', ''))),
             "Not India Location": sum(1 for j in all_jobs if not j.get('match_analysis', {}).get('location_india', True)),
+            "Experience Mismatch": sum(1 for j in all_jobs if not j.get('match_analysis', {}).get('experience_match', False)),
             "Low Confidence": sum(1 for j in all_jobs if j.get('validation', {}).get('confidence_score', 100) < 60),
             "Doesn't Match Role": filtered_count
         }
@@ -301,16 +302,17 @@ Return JSON:
         validation_report = self.validator.generate_validation_report(
             original_count, 
             len(validated_jobs), 
-            filtering_reasons
+            filtering_reasons,
+            user_experience  # Pass user_experience
         )
         
-        status_text.text(f"✅ Validation complete! {len(validated_jobs)} verified jobs")
+        status_text.text(f"✅ Validation complete! {len(validated_jobs)} jobs match {user_experience} years experience")
         
         # Show company stats
         with st.expander("📊 Search Statistics by Company"):
             for company, count in sorted(company_job_count.items(), key=lambda x: x[1], reverse=True):
                 verified = sum(1 for j in validated_jobs if j['company'] == company)
-                st.write(f"• **{company}**: {count} found → {verified} verified")
+                st.write(f"• **{company}**: {count} found → {verified} verified (experience-matched)")
         
         return {
             "jobs": validated_jobs,
@@ -321,6 +323,7 @@ Return JSON:
                 "filtered_count": filtered_count
             }
         }
+
     
     def get_recommendations(self, jobs: List[Dict], user_experience: int = 0) -> str:
         """Generate AI recommendations"""
